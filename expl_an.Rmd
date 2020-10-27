@@ -1,0 +1,140 @@
+---
+title: "Data Science Specialization: Milestone report"
+author: "Oscar BA"
+date: "8/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Data Science Capstone
+### Milestone report
+
+This is the milestone report for the Data Science Specialization by Johns Hokpins University through Coursera. The objective of this report is to do an exploratory data analysis before developing a word prediction app.
+
+The data can be downloaded here: https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip
+
+The first step is to get an overview of the files. The data includes three sources (twitter, blogs and news) of text in four different languages (Finnish, German, Russian and English). Only the english files will be used for this project, which is why I defined us.fl, the list of the paths to the english files.
+
+```{r}
+library(zip)
+flist <- zip_list('Coursera-Swiftkey.zip')[,1]
+us.fl <- flist[grep('en_US.*txt',flist)]
+us.fl
+```
+
+To read and summarize the data, the next function was defined:
+
+```{r}
+library(magrittr) # For the %>% operator
+library(tibble) # For the tibble data frame
+library(stringi) # Loads stri_stats_latex function
+file_read <- function(file_path){
+  file_name <- substr(file_path,
+                      start=regexpr('[.][a-zA-Z]+[.]txt', file_path)[1]+1,
+                      stop=regexpr('[.]txt', file_path)[1]-1)
+  con <- file(description = file_path, 'rb', encoding = "UTF-8") 
+  sauce <- con %>% readLines(encoding = "UTF-8")
+  file_size <- object.size(sauce)[1]/2^20
+  sauce <- sauce %>% tibble()
+  close(con)
+  file_lines <- dim(sauce)[1]
+  file_words <- stri_stats_latex(sauce$.)['Words']
+  m <- data.frame('file'=file_name, 'size.mb'=file_size,'lines'=file_lines, 'words'=file_words)
+  rownames(m) <- NULL
+  l <- list('sum'=m,'sauce'=sauce)
+  return(l)
+}
+```
+Then, the three data sets are read and summarized
+
+```{r}
+en.data <- lapply(us.fl,file_read)
+data.sum <- rbind(en.data[[1]]$sum,en.data[[2]]$sum,en.data[[3]]$sum)
+names(en.data) <- data.sum$file
+data.sum
+```
+
+Then, the data must be cleaned. The 'tm' package offers a set of text data transformations useful for this kind of projects.
+
+```{r}
+library(tm)
+getTransformations()
+```
+
+However, additional cleaning is needed. For example, profanities must be eliminated before writing the prediction algorithm. A list of english bad words banned from google can be found here: https://www.freewebheaders.com/full-list-of-bad-words-banned-by-google/. Urls and hashtags shall be elimininated too. The data encoding considered is 'UTF-8'. Under this encoding, quotation marks take the form â, which is also eliminated. Contractions are speciffically controled for by transforming them into the complete words. A list of contractions and their respective complete text can be found here: https://en.wikipedia.org/wiki/Wikipedia:List_of_English_contractions. Finally, all other non-english characters will be eliminated too.
+
+```{r}
+library(qdap)
+conts <- read.csv('contractions.csv', header = T)
+names(conts) <- c('conts','words')
+conts[] <- lapply(conts, as.character)
+profs <- read.csv('bad_words2.csv', header = T)
+profs$word <- as.character(profs$word)
+removeProf <- function(x){ multigsub(profs$word, '', x) } # Profanities
+removeExtras <- function(x){return( gsub('#[a-zA-Z0-9]+( ?) | 
+                                          ( ?)(f|ht)tp(s?)://.*[.][^ ]* |
+                                          \"|â|\'','',x) )} # hashtags, url, apostrophe and quotations
+removeConts <- function(x){ multigsub(conts$conts, conts$words, x) } # contractions
+removeNoeng <- function(x){return( gsub('\\W+',' ',x) )} # non-english
+file_clean <- function(x){
+  x <- x %>% removeConts() %>% removeProf() %>% 
+    removeExtras() %>% removeNumbers() %>% removeNoeng() %>% stripWhitespace()
+  return(x)
+}
+```
+
+
+file_clean applies all the previously defined transformations. Given the size of the data, the model will be built on a sample of it.
+
+```{r}
+cleaned.data <- lapply(en.data, FUN=function(x){x$sauce$.}) %>% 
+  lapply(., FUN=function(x){sample(x,size=0.1*length(x), replace = F)} ) %>% 
+  lapply(., FUN=file_clean) %>% lapply(., function(x){enframe(x, value = '.')})
+```
+
+Now, the words' frequencies are explored. To do this, the function unnest_tokens from the package tidytext and count from dplyr are used.
+
+```{r}
+library(tidytext)
+library(dplyr)
+tkns <- lapply(cleaned.data, FUN= unnest_tokens, input = ., output = word, 
+                        token = 'words', format = 'text', to_lower = TRUE) %>% 
+  lapply(., FUN=function(x){count(x, word, sort=T)})
+```
+Then, the most frequent tokens are plotted.
+```{r}
+library(ggplot2)
+library(wordcloud)
+for (i in 1:length(us.fl)) {
+p <-  tkns[[i]] %>% mutate(word = reorder(word, n)) %>% head(30) %>% 
+      ggplot(aes(word, n)) +
+      labs(title= 'Frequencies', subtitle = data.sum$file[i]) +
+      geom_col() + 
+      coord_flip()
+print(p)
+wc <- wordcloud(tkns[[i]]$word, tkns[[i]]$n, max.words = 30)
+wc  
+}
+```
+As expected, the most frequent words in every case are stopwords. To see if there is any difference between type of text, stopwords are excluded from the analysis and the plots are done again.
+
+```{r}
+tkns_nsw <- lapply(tkns, function(x){anti_join(x,stop_words)})
+for (i in 1:length(us.fl)) {
+p <-  tkns_nsw[[i]] %>% mutate(word = reorder(word, n)) %>% head(30) %>% 
+      ggplot(aes(word, n)) +
+      labs(title= 'Frequencies', subtitle = data.sum$file[i]) +
+      geom_col() + 
+      coord_flip()
+print(p)
+wc <- wordcloud(tkns_nsw[[i]]$word, tkns_nsw[[i]]$n, max.words = 30)
+wc  
+}
+```
+
+It is possible to see that there is a difference between the most common unigrams, depending on the source. This suggests that a different model is built for each type of file. For the next steps, n-grams shall be explored. For the shiny app, options to select the type of text shall be included, based on the findings of this analysis.
+
+
