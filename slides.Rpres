@@ -1,0 +1,40 @@
+Data Science Specialization: Final Project
+========================================================
+author: Oscar BA
+date: 10/09/2020
+autosize: true
+
+Introduction
+========================================================
+This is part of the final project of the [Data Science Specialization](https://www.coursera.org/specializations/jhu-data-science) offered by Johns Hopkins University through Coursera .
+
+**Objective:**
+Develop a shiny app that takes a phrase as input and predicts the next word.
+
+Method
+========================================================
+In the field of Natural Language Processing, several methods can be used for text prediciton such as n-grams models and Recurrent Neural Networks.
+
+For the purpose of this project, a [Katz n-gram back-off model](https://en.wikipedia.org/wiki/Katz%27s_back-off_model#:~:text=Katz%20back%2Doff%20is%20a,history%20models%20under%20certain%20conditions) was used. This consists on estimating the conditional probability of a word completing a given phrase of *n* words. The model's estimation is the word with the highest conditional probability. If no word completing the given *n*-phrase is found, the model looks for the *(n-1)*-phrase. The process is repeated, if necessary, until the most common single words are used for prediction.  
+
+Data
+========================================================
+The [data](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) was provided by Swiftkey for the course. It includes blogs, news and twitter texts in Finnish, German, Russian and English. However, only the enlgish documents were used for this model.
+
+*English files*
+
+| File    | Size (mb) | Lines     | Words      |
+|:-------:|----------:|----------:|-----------:|
+| Twitter | 318.9895  | 2,360,148	| 30,451,128 |
+| News    | 257.3404  | 1,010,242	| 34,494,539 |
+| Blogs   | 255.3545  |   899,288 | 37,570,839 |
+
+Because of the size of the data, only 2.5% of each file was taken and combined to build the prediciton model.
+The data cleaning process and descriptive analysis can be found [here.](https://rpubs.com/oscarba07/DSS_milestone)
+
+App
+========================================================
+The shiny app is published [here](https://oscarba07.shinyapps.io/text_predict_app/).
+
+![App usage](app_ex.png)
+
